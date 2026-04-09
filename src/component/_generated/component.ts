@@ -365,6 +365,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         } | null,
         Name
       >;
+      getUserIdByPolarCustomerId: FunctionReference<
+        "query",
+        "internal",
+        { polarCustomerId: string },
+        { userId: string } | null,
+        Name
+      >;
       insertCustomer: FunctionReference<
         "mutation",
         "internal",

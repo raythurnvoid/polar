@@ -22,6 +22,23 @@ export const getCustomerByUserId = query({
   },
 });
 
+export const getUserIdByPolarCustomerId = query({
+  args: {
+    polarCustomerId: v.string(),
+  },
+  returns: v.union(v.object({ userId: v.string() }), v.null()),
+  handler: async (ctx, args) => {
+    const customer = await ctx.db
+      .query("customers")
+      .withIndex("id", (q) => q.eq("id", args.polarCustomerId))
+      .unique();
+    if (!customer) {
+      return null;
+    }
+    return { userId: customer.userId };
+  },
+});
+
 export const insertCustomer = mutation({
   args: schema.tables.customers.validator,
   returns: v.id("customers"),

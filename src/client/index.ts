@@ -1,12 +1,14 @@
 import "./polyfill.js";
 import { PolarCore } from "@polar-sh/sdk/core.js";
 import { customersCreate } from "@polar-sh/sdk/funcs/customersCreate.js";
+import { customersGetState } from "@polar-sh/sdk/funcs/customersGetState.js";
 import { customersList } from "@polar-sh/sdk/funcs/customersList.js";
 import { checkoutsCreate } from "@polar-sh/sdk/funcs/checkoutsCreate.js";
 import { customerSessionsCreate } from "@polar-sh/sdk/funcs/customerSessionsCreate.js";
 import { subscriptionsUpdate } from "@polar-sh/sdk/funcs/subscriptionsUpdate.js";
 
 import type { Checkout } from "@polar-sh/sdk/models/components/checkout.js";
+import type { CustomerState } from "@polar-sh/sdk/models/components/customerstate.js";
 import type { WebhookProductCreatedPayload } from "@polar-sh/sdk/models/components/webhookproductcreatedpayload.js";
 import type { WebhookProductUpdatedPayload } from "@polar-sh/sdk/models/components/webhookproductupdatedpayload.js";
 import type { WebhookSubscriptionCreatedPayload } from "@polar-sh/sdk/models/components/webhooksubscriptioncreatedpayload.js";
@@ -102,6 +104,26 @@ export class Polar<
   getCustomerByUserId(ctx: QueryCtx | MutationCtx | ActionCtx, userId: string) {
     return ctx.runQuery(this.component.lib.getCustomerByUserId, { userId });
   }
+  /**
+   * Fetch Polar {@link CustomerState} for a mapped Convex user using the stored Polar customer id.
+   * Return `null` when the user has no Polar customer row yet.
+   */
+  async getCustomerState(
+    ctx: GenericActionCtx<DataModel>,
+    { userId }: { userId: string },
+  ): Promise<CustomerState | null> {
+    const customer = await ctx.runQuery(this.component.lib.getCustomerByUserId, {
+      userId,
+    });
+    if (!customer) {
+      return null;
+    }
+    const stateResult = await customersGetState(this.polar, { id: customer.id });
+    if (!stateResult.ok) {
+      throw stateResult.error;
+    }
+    return stateResult.value;
+  }
   async syncProducts(ctx: ActionCtx) {
     await ctx.runAction(this.component.lib.syncProducts, {
       polarAccessToken: this.organizationToken,
@@ -151,6 +173,7 @@ export class Polar<
       }
       const customer = await customersCreate(this.polar, {
         email,
+        externalId: userId,
         metadata: {
           userId,
         },
