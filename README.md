@@ -104,8 +104,14 @@ to:
 
    - `product.created`
    - `product.updated`
+   - `benefit.created`
+   - `benefit.updated`
    - `subscription.created`
    - `subscription.updated`
+
+   Benefit webhook payloads do not include product assignments, so the built-in
+   handler responds to `benefit.created` and `benefit.updated` by running a full
+   product catalog sync.
 
 2. Set the webhook secret in your Convex environment:
 

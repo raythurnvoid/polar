@@ -511,7 +511,7 @@ export class Polar<
         try {
           const event = validateEvent(body, headers, this.webhookSecret);
 
-          // Built-in handling: persist subscriptions and products
+          // Built-in handling: persist subscriptions and products.
           switch (event.type) {
             case "subscription.created": {
               await ctx.runMutation(this.component.lib.createSubscription, {
@@ -535,6 +535,11 @@ export class Polar<
               await ctx.runMutation(this.component.lib.updateProduct, {
                 product: convertToDatabaseProduct(event.data),
               });
+              break;
+            }
+            case "benefit.created":
+            case "benefit.updated": {
+              await this.syncProducts(ctx);
               break;
             }
           }

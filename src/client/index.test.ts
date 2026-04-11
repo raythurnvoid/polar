@@ -7,6 +7,8 @@ const polarSdkMocks = vi.hoisted(() => ({
 	checkoutsCreate: vi.fn(),
 	customersCreate: vi.fn(),
 	customersList: vi.fn(),
+	productsList: vi.fn(),
+	validateEvent: vi.fn(),
 }));
 
 vi.mock("@polar-sh/sdk/funcs/checkoutsCreate.js", () => ({
@@ -21,11 +23,21 @@ vi.mock("@polar-sh/sdk/funcs/customersList.js", () => ({
 	customersList: polarSdkMocks.customersList,
 }));
 
+vi.mock("@polar-sh/sdk/funcs/productsList.js", () => ({
+	productsList: polarSdkMocks.productsList,
+}));
+
+vi.mock("@polar-sh/sdk/webhooks", () => ({
+	WebhookVerificationError: class WebhookVerificationError extends Error {},
+	validateEvent: polarSdkMocks.validateEvent,
+}));
+
 const polar = new Polar(components.polar, {
-  getUserInfo: async () => ({
-    userId: "user_123",
-    email: "test@example.com",
-  }),
+	getUserInfo: async () => ({
+		userId: "user_123",
+		email: "test@example.com",
+	}),
+	organizationToken: "polar_test_org_token",
 });
 
 const checkoutApi = polar.api();
@@ -75,41 +87,76 @@ describe("generateCheckoutLink", () => {
 			ok: true,
 			value: { result: { items: [{ id: "cust_123" }] } },
 		});
-    polarSdkMocks.checkoutsCreate.mockResolvedValue({
-      ok: true,
-      value: { url: "https://checkout.polar.sh/session?foo=bar" },
-    });
+		polarSdkMocks.checkoutsCreate.mockResolvedValue({
+			ok: true,
+			value: { url: "https://checkout.polar.sh/session?foo=bar" },
+		});
 
-    const t = initConvexTest();
-    const result = await t.action(testApi.generateCheckoutLink, {
-      productIds: ["prod_1"],
-      origin: "https://example.com",
-      successUrl: "https://example.com/success",
-      locale: "fr",
-    });
+		const t = initConvexTest();
+		const result = await t.action(testApi.generateCheckoutLink, {
+			productIds: ["prod_1"],
+			origin: "https://example.com",
+			successUrl: "https://example.com/success",
+			locale: "fr",
+		});
 
-    expect(result.url).toContain("locale=fr");
-    expect(result.url).toMatch(/^https:\/\//);
-  });
+		expect(result.url).toContain("locale=fr");
+		expect(result.url).toMatch(/^https:\/\//);
+	});
 
-  test("does not append locale if not provided", async () => {
-    polarSdkMocks.customersList.mockResolvedValue({
-      ok: true,
-      value: { result: { items: [{ id: "cust_123" }] } },
-    });
-    polarSdkMocks.checkoutsCreate.mockResolvedValue({
-      ok: true,
-      value: { url: "https://checkout.polar.sh/session?foo=bar" },
-    });
+	test("does not append locale if not provided", async () => {
+		polarSdkMocks.customersList.mockResolvedValue({
+			ok: true,
+			value: { result: { items: [{ id: "cust_123" }] } },
+		});
+		polarSdkMocks.checkoutsCreate.mockResolvedValue({
+			ok: true,
+			value: { url: "https://checkout.polar.sh/session?foo=bar" },
+		});
 
-    const t = initConvexTest();
-    const result = await t.action(testApi.generateCheckoutLink, {
-      productIds: ["prod_1"],
-      origin: "https://example.com",
-      successUrl: "https://example.com/success",
-    });
+		const t = initConvexTest();
+		const result = await t.action(testApi.generateCheckoutLink, {
+			productIds: ["prod_1"],
+			origin: "https://example.com",
+			successUrl: "https://example.com/success",
+		});
 
-    expect(result.url).not.toContain("locale=");
-    expect(result.url).toMatch(/^https:\/\//);
-  });
+		expect(result.url).not.toContain("locale=");
+		expect(result.url).toMatch(/^https:\/\//);
+	});
+});
+
+describe("registerRoutes", () => {
+	test("triggers a full product sync when a benefit is updated", async () => {
+		polarSdkMocks.validateEvent.mockReturnValue({
+			type: "benefit.updated",
+			data: {
+				id: "benefit_123",
+			},
+		});
+		polarSdkMocks.productsList.mockResolvedValue({
+			ok: true,
+			value: {
+				result: {
+					items: [],
+					pagination: {
+						maxPage: 1,
+					},
+				},
+			},
+		});
+
+		const t = initConvexTest();
+		const response = await t.fetch("/polar/events", {
+			method: "POST",
+			body: JSON.stringify({ fake: true }),
+		});
+
+		expect(response.status).toBe(202);
+		expect(polarSdkMocks.productsList).toHaveBeenCalledTimes(1);
+		expect(polarSdkMocks.productsList).toHaveBeenCalledWith(expect.anything(), {
+			page: 1,
+			limit: 100,
+		});
+	});
 });
