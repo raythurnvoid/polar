@@ -77,7 +77,6 @@ describe("generateCheckoutLink", () => {
 			expect.anything(),
 			expect.objectContaining({
 				externalId: "user_123",
-				metadata: { userId: "user_123" },
 			}),
 		);
 	});

@@ -60,6 +60,7 @@ export type WebhookEventHandlers = {
   [K in PolarWebhookEvent["type"]]?: (
     ctx: MutationCtx | ActionCtx,
     event: Extract<PolarWebhookEvent, { type: K }>,
+    rawPayload: unknown,
   ) => Promise<void>;
 };
 
@@ -174,9 +175,6 @@ export class Polar<
       const customer = await customersCreate(this.polar, {
         email,
         externalId: userId,
-        metadata: {
-          userId,
-        },
       });
       if (!customer.ok) {
         throw customer.error;
@@ -487,16 +485,24 @@ export class Polar<
     // Merge deprecated callbacks into events map (events wins on conflict)
     const mergedEvents: WebhookEventHandlers = { ...events };
     if (onSubscriptionCreated && !mergedEvents["subscription.created"]) {
-      mergedEvents["subscription.created"] = onSubscriptionCreated;
+      mergedEvents["subscription.created"] = async (ctx, event) => {
+        await onSubscriptionCreated(ctx, event);
+      };
     }
     if (onSubscriptionUpdated && !mergedEvents["subscription.updated"]) {
-      mergedEvents["subscription.updated"] = onSubscriptionUpdated;
+      mergedEvents["subscription.updated"] = async (ctx, event) => {
+        await onSubscriptionUpdated(ctx, event);
+      };
     }
     if (onProductCreated && !mergedEvents["product.created"]) {
-      mergedEvents["product.created"] = onProductCreated;
+      mergedEvents["product.created"] = async (ctx, event) => {
+        await onProductCreated(ctx, event);
+      };
     }
     if (onProductUpdated && !mergedEvents["product.updated"]) {
-      mergedEvents["product.updated"] = onProductUpdated;
+      mergedEvents["product.updated"] = async (ctx, event) => {
+        await onProductUpdated(ctx, event);
+      };
     }
 
     http.route({
@@ -510,6 +516,7 @@ export class Polar<
         const headers = Object.fromEntries(request.headers.entries());
         try {
           const event = validateEvent(body, headers, this.webhookSecret);
+          const rawPayload = JSON.parse(body) as unknown;
 
           // Built-in handling: persist subscriptions and products.
           switch (event.type) {
@@ -549,10 +556,11 @@ export class Polar<
             | ((
                 ctx: MutationCtx | ActionCtx,
                 event: PolarWebhookEvent,
+                rawPayload: unknown,
               ) => Promise<void>)
             | undefined;
           if (handler) {
-            await handler(ctx, event);
+            await handler(ctx, event, rawPayload);
           }
 
           return new Response("Accepted", { status: 202 });
