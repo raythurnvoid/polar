@@ -64,6 +64,14 @@ export const deleteCustomerByPolarCustomerId = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const subscriptions = await ctx.db
+      .query("subscriptions")
+      .withIndex("customerId", (q) => q.eq("customerId", args.polarCustomerId))
+      .collect();
+    for (const subscription of subscriptions) {
+      await ctx.db.delete(subscription._id);
+    }
+
     const customer = await ctx.db
       .query("customers")
       .withIndex("id", (q) => q.eq("id", args.polarCustomerId))

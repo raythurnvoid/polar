@@ -38,6 +38,7 @@ const polar = new Polar(components.polar, {
 	getUserInfo: async () => ({
 		userId: "user_123",
 		email: "test@example.com",
+		name: "Test User",
 	}),
 	organizationToken: "polar_test_org_token",
 });
@@ -115,6 +116,7 @@ describe("generateCheckoutLink", () => {
 			expect.anything(),
 			expect.objectContaining({
 				externalId: "user_123",
+				name: "Test User",
 			}),
 		);
 	});
@@ -289,7 +291,47 @@ describe("registerRoutes", () => {
 
 		expect(response.status).toBe(202);
 		expect(customer).toBeNull();
-		expect(subscriptions.map((subscription) => subscription.id)).toEqual(["sub_deleted_route"]);
+		expect(subscriptions).toEqual([]);
+	});
+
+	test("removes local customer mapping for customer.updated webhooks with deletedAt", async () => {
+		const t = initConvexTest();
+		await t.mutation(components.polar.lib.insertCustomer, {
+			id: "cust_deleted_updated_route",
+			userId: "user_deleted_updated_route",
+		});
+		await t.mutation(components.polar.lib.createSubscription, {
+			subscription: convertToDatabaseSubscription(
+				createWebhookSubscription({
+					id: "sub_deleted_updated_route",
+					customerId: "cust_deleted_updated_route",
+				}),
+			),
+		});
+
+		polarSdkMocks.validateEvent.mockReturnValue({
+			type: "customer.updated",
+			timestamp: new Date("2026-01-03T00:00:00.000Z"),
+			data: {
+				id: "cust_deleted_updated_route",
+				deletedAt: new Date("2026-01-03T00:00:00.000Z"),
+			},
+		});
+		const response = await t.fetch("/polar/events", {
+			method: "POST",
+			body: JSON.stringify({ fake: true }),
+		});
+
+		const customer = await t.query(components.polar.lib.getCustomerByUserId, {
+			userId: "user_deleted_updated_route",
+		});
+		const subscriptions = await t.query(components.polar.lib.listCustomerSubscriptions, {
+			customerId: "cust_deleted_updated_route",
+		});
+
+		expect(response.status).toBe(202);
+		expect(customer).toBeNull();
+		expect(subscriptions).toEqual([]);
 	});
 
 	test("triggers a full product sync when a benefit is updated", async () => {

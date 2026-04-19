@@ -1213,7 +1213,7 @@ describe("deleteCustomerByPolarCustomerId mutation", () => {
     t = convexTest(schema, modules);
   });
 
-  it("removes only the target customer and leaves subscription mirror updates to webhooks", async () => {
+  it("removes only the target customer and that customer's subscriptions", async () => {
     await t.mutation(
       api.lib.insertCustomer,
       createTestCustomer({ id: "cust_target", userId: "user_target" }),
@@ -1268,10 +1268,7 @@ describe("deleteCustomerByPolarCustomerId mutation", () => {
 
     expect(targetCustomer).toBeNull();
     expect(otherCustomer?.id).toBe("cust_other");
-    expect(targetSubscriptions.map((subscription) => subscription.id)).toEqual([
-      "sub_target_1",
-      "sub_target_2",
-    ]);
+    expect(targetSubscriptions).toEqual([]);
     expect(otherSubscriptions.map((subscription) => subscription.id)).toEqual([
       "sub_other_1",
     ]);

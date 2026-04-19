@@ -81,6 +81,7 @@ export class Polar<
       getUserInfo: (ctx: QueryCtx | MutationCtx | ActionCtx) => Promise<{
         userId: string;
         email: string;
+        name?: string | null;
       }>;
       organizationToken?: string;
       webhookSecret?: string;
@@ -138,6 +139,7 @@ export class Polar<
       productIds,
       userId,
       email,
+      name,
       origin,
       successUrl,
       subscriptionId,
@@ -148,6 +150,7 @@ export class Polar<
       productIds: string[];
       userId: string;
       email: string;
+      name?: string | null;
       origin: string;
       successUrl: string;
       subscriptionId?: string;
@@ -175,6 +178,7 @@ export class Polar<
       const customer = await customersCreate(this.polar, {
         email,
         externalId: userId,
+        name,
       });
       if (!customer.ok) {
         throw customer.error;
@@ -397,11 +401,12 @@ export class Polar<
           url: v.string(),
         }),
         handler: async (ctx, args) => {
-          const { userId, email } = await this.config.getUserInfo(ctx);
+          const { userId, email, name } = await this.config.getUserInfo(ctx);
           const { url: baseUrl } = await this.createCheckoutSession(ctx, {
             productIds: args.productIds,
             userId,
             email,
+            name,
             subscriptionId: args.subscriptionId,
             origin: args.origin,
             successUrl: args.successUrl,
@@ -557,6 +562,19 @@ export class Polar<
             case "benefit.created":
             case "benefit.updated": {
               await this.syncProducts(ctx);
+              break;
+            }
+            case "customer.updated": {
+              if (event.data.deletedAt) {
+                // Treat deletedAt as the deletion signal because Polar may report
+                // anonymized customer deletes without emitting customer.deleted.
+                await ctx.runMutation(
+                  this.component.lib.deleteCustomerByPolarCustomerId,
+                  {
+                    polarCustomerId: event.data.id,
+                  },
+                );
+              }
               break;
             }
             case "customer.deleted": {
