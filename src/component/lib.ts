@@ -58,6 +58,26 @@ export const insertCustomer = mutation({
   },
 });
 
+export const deleteCustomerByPolarCustomerId = mutation({
+  args: {
+    polarCustomerId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const customer = await ctx.db
+      .query("customers")
+      .withIndex("id", (q) => q.eq("id", args.polarCustomerId))
+      .unique();
+    if (!customer) {
+      return null;
+    }
+
+    await ctx.db.delete(customer._id);
+
+    return null;
+  },
+});
+
 export const getSubscription = query({
   args: {
     id: v.string(),

@@ -5,7 +5,10 @@ import type { TestConvex } from "convex-test";
 import type { Infer } from "convex/values";
 import schema from "./schema.js";
 import { api } from "./_generated/api.js";
-import { convertToDatabaseProduct, convertToDatabaseSubscription } from "./util.js";
+import {
+  convertToDatabaseProduct,
+  convertToDatabaseSubscription,
+} from "./util.js";
 import type { Product } from "@polar-sh/sdk/models/components/product.js";
 import type { Subscription } from "@polar-sh/sdk/models/components/subscription.js";
 
@@ -42,9 +45,7 @@ function createTestSubscription(
 }
 
 // Helper to create a minimal valid product for testing
-function createTestProduct(
-  overrides: Partial<DbProduct> = {},
-): DbProduct {
+function createTestProduct(overrides: Partial<DbProduct> = {}): DbProduct {
   return {
     id: "prod_123",
     organizationId: "org_456",
@@ -64,9 +65,7 @@ function createTestProduct(
 }
 
 // Helper to create a minimal valid customer for testing
-function createTestCustomer(
-  overrides: Partial<DbCustomer> = {},
-): DbCustomer {
+function createTestCustomer(overrides: Partial<DbCustomer> = {}): DbCustomer {
   return {
     id: "cust_123",
     userId: "user_456",
@@ -114,6 +113,27 @@ describe("createSubscription mutation", () => {
     expect(result).not.toBeNull();
     expect(result?.id).toBe("sub_123");
     expect(result?.status).toBe("active");
+  });
+
+  it("persists pendingUpdate when the subscription has a scheduled next-period change", async () => {
+    const subscription = createTestSubscription({
+      pendingUpdate: {
+        id: "pending_sub_update",
+        appliesAt: "2025-02-15T10:00:00.000Z",
+        productId: "prod_next",
+        seats: null,
+      },
+    });
+
+    await t.mutation(api.lib.createSubscription, { subscription });
+
+    const result = await t.query(api.lib.getSubscription, { id: "sub_123" });
+    expect(result?.pendingUpdate).toEqual({
+      id: "pending_sub_update",
+      appliesAt: "2025-02-15T10:00:00.000Z",
+      productId: "prod_next",
+      seats: null,
+    });
   });
 
   it("patches when existing record has older modifiedAt", async () => {
@@ -547,7 +567,10 @@ describe("product price types (SDK → converter → DB round-trip)", () => {
     expect(result?.prices[0].unitAmount).toBe("0.01");
     expect(result?.prices[0].capAmount).toBe(5000);
     expect(result?.prices[0].meterId).toBe("meter_123");
-    expect(result?.prices[0].meter).toEqual({ id: "meter_123", name: "API Calls" });
+    expect(result?.prices[0].meter).toEqual({
+      id: "meter_123",
+      name: "API Calls",
+    });
   });
 
   it("converts and stores benefits from SDK format", async () => {
@@ -898,9 +921,21 @@ describe("SDK 0.45.0 — ProductPriceSeatTiersOutput with minimumSeats/maximumSe
     const result = await t.query(api.lib.getProduct, { id: "prod_123" });
 
     expect(result?.prices[0].seatTiers).toHaveLength(3);
-    expect(result?.prices[0].seatTiers?.[0]).toEqual({ minSeats: 3, maxSeats: 10, pricePerSeat: 2000 });
-    expect(result?.prices[0].seatTiers?.[1]).toEqual({ minSeats: 11, maxSeats: 50, pricePerSeat: 1500 });
-    expect(result?.prices[0].seatTiers?.[2]).toEqual({ minSeats: 51, maxSeats: null, pricePerSeat: 1000 });
+    expect(result?.prices[0].seatTiers?.[0]).toEqual({
+      minSeats: 3,
+      maxSeats: 10,
+      pricePerSeat: 2000,
+    });
+    expect(result?.prices[0].seatTiers?.[1]).toEqual({
+      minSeats: 11,
+      maxSeats: 50,
+      pricePerSeat: 1500,
+    });
+    expect(result?.prices[0].seatTiers?.[2]).toEqual({
+      minSeats: 51,
+      maxSeats: null,
+      pricePerSeat: 1000,
+    });
   });
 
   it("seat-based price with bounded maximumSeats stores the capped tier correctly", async () => {
@@ -1026,6 +1061,12 @@ describe("SDK 0.45.0 — convertToDatabaseSubscription date conversion", () => {
     expect(result.recurringIntervalCount).toBe(3);
   });
 
+  it("stores priceId when the subscription payload includes it", () => {
+    const sdk = createSdkSubscription({ priceId: "price_123" });
+    const result = convertToDatabaseSubscription(sdk);
+    expect(result.priceId).toBe("price_123");
+  });
+
   it("stores endedAt date when subscription has ended", () => {
     const sdk = createSdkSubscription({
       endedAt: new Date("2025-05-01T00:00:00.000Z"),
@@ -1072,6 +1113,32 @@ describe("SDK 0.45.0 — convertToDatabaseSubscription date conversion", () => {
       seat_count: 10,
       is_trial: false,
     });
+  });
+
+  it("stores pendingUpdate when the subscription payload includes a scheduled change", () => {
+    const sdk = createSdkSubscription({
+      pendingUpdate: {
+        id: "pending_update_123",
+        createdAt: new Date("2025-03-15T00:00:00.000Z"),
+        modifiedAt: null,
+        appliesAt: new Date("2025-04-01T00:00:00.000Z"),
+        productId: "prod_next",
+        seats: 8,
+      },
+    });
+    const result = convertToDatabaseSubscription(sdk);
+    expect(result.pendingUpdate).toEqual({
+      id: "pending_update_123",
+      appliesAt: "2025-04-01T00:00:00.000Z",
+      productId: "prod_next",
+      seats: 8,
+    });
+  });
+
+  it("stores null pendingUpdate when there is no scheduled change", () => {
+    const sdk = createSdkSubscription({ pendingUpdate: null });
+    const result = convertToDatabaseSubscription(sdk);
+    expect(result.pendingUpdate).toBeNull();
   });
 });
 
@@ -1135,6 +1202,79 @@ describe("insertCustomer mutation", () => {
 
     expect(result1?.id).toBe("cust_123");
     expect(result2?.id).toBe("cust_456");
+  });
+
+});
+
+describe("deleteCustomerByPolarCustomerId mutation", () => {
+  let t: TestConvex<typeof schema>;
+
+  beforeEach(() => {
+    t = convexTest(schema, modules);
+  });
+
+  it("removes only the target customer and leaves subscription mirror updates to webhooks", async () => {
+    await t.mutation(
+      api.lib.insertCustomer,
+      createTestCustomer({ id: "cust_target", userId: "user_target" }),
+    );
+    await t.mutation(
+      api.lib.insertCustomer,
+      createTestCustomer({ id: "cust_other", userId: "user_other" }),
+    );
+
+    await t.mutation(api.lib.createSubscription, {
+      subscription: createTestSubscription({
+        id: "sub_target_1",
+        customerId: "cust_target",
+      }),
+    });
+    await t.mutation(api.lib.createSubscription, {
+      subscription: createTestSubscription({
+        id: "sub_target_2",
+        customerId: "cust_target",
+      }),
+    });
+    await t.mutation(api.lib.createSubscription, {
+      subscription: createTestSubscription({
+        id: "sub_other_1",
+        customerId: "cust_other",
+      }),
+    });
+
+    await t.mutation(api.lib.deleteCustomerByPolarCustomerId, {
+      polarCustomerId: "cust_target",
+    });
+
+    const [
+      targetCustomer,
+      otherCustomer,
+      targetSubscriptions,
+      otherSubscriptions,
+    ] = await Promise.all([
+      t.query(api.lib.getCustomerByUserId, {
+        userId: "user_target",
+      }),
+      t.query(api.lib.getCustomerByUserId, {
+        userId: "user_other",
+      }),
+      t.query(api.lib.listCustomerSubscriptions, {
+        customerId: "cust_target",
+      }),
+      t.query(api.lib.listCustomerSubscriptions, {
+        customerId: "cust_other",
+      }),
+    ]);
+
+    expect(targetCustomer).toBeNull();
+    expect(otherCustomer?.id).toBe("cust_other");
+    expect(targetSubscriptions.map((subscription) => subscription.id)).toEqual([
+      "sub_target_1",
+      "sub_target_2",
+    ]);
+    expect(otherSubscriptions.map((subscription) => subscription.id)).toEqual([
+      "sub_other_1",
+    ]);
   });
 });
 

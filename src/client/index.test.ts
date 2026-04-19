@@ -2,6 +2,8 @@ import { describe, expect, test, vi } from "vitest";
 import { Polar } from "./index.js";
 import { anyApi, type ApiFromModules } from "convex/server";
 import { components, initConvexTest } from "./setup.test.js";
+import type { Subscription } from "@polar-sh/sdk/models/components/subscription.js";
+import { convertToDatabaseSubscription } from "../component/util.js";
 
 const polarSdkMocks = vi.hoisted(() => ({
 	checkoutsCreate: vi.fn(),
@@ -50,6 +52,42 @@ const testApi = (
     };
   }>
 )["index.test"];
+
+function createWebhookSubscription(
+	overrides: Partial<Subscription & { priceId?: string | null }> = {},
+): Subscription & { priceId?: string | null } {
+	return {
+		id: "sub_webhook",
+		customerId: "cust_webhook",
+		productId: "prod_webhook",
+		checkoutId: null,
+		createdAt: new Date("2026-01-01T00:00:00.000Z"),
+		modifiedAt: new Date("2026-01-02T00:00:00.000Z"),
+		amount: 1000,
+		currency: "eur",
+		recurringInterval: "month",
+		recurringIntervalCount: 1,
+		status: "active",
+		currentPeriodStart: new Date("2026-01-01T00:00:00.000Z"),
+		currentPeriodEnd: new Date("2026-02-01T00:00:00.000Z"),
+		trialStart: null,
+		trialEnd: null,
+		cancelAtPeriodEnd: false,
+		canceledAt: null,
+		startedAt: new Date("2026-01-01T00:00:00.000Z"),
+		endsAt: null,
+		endedAt: null,
+		discountId: null,
+		seats: null,
+		customerCancellationReason: null,
+		customerCancellationComment: null,
+		metadata: {},
+		customFieldData: {},
+		pendingUpdate: null,
+		priceId: "price_webhook",
+		...overrides,
+	} as Subscription & { priceId?: string | null };
+}
 
 describe("generateCheckoutLink", () => {
 	test("passes externalId equal to userId when creating a new Polar customer", async () => {
@@ -126,6 +164,134 @@ describe("generateCheckoutLink", () => {
 });
 
 describe("registerRoutes", () => {
+	test.each([
+		"subscription.created",
+		"subscription.updated",
+		"subscription.active",
+		"subscription.canceled",
+		"subscription.uncanceled",
+		"subscription.revoked",
+		"subscription.past_due",
+	] as const)("upserts local subscriptions for %s webhooks", async (eventType) => {
+		const subscriptionId = `sub_${eventType.replace(".", "_")}`;
+		polarSdkMocks.validateEvent.mockReturnValue({
+			type: eventType,
+			timestamp: new Date("2026-01-03T00:00:00.000Z"),
+			data: createWebhookSubscription({
+				id: subscriptionId,
+				modifiedAt: new Date("2026-01-03T00:00:00.000Z"),
+			}),
+		});
+
+		const t = initConvexTest();
+		const response = await t.fetch("/polar/events", {
+			method: "POST",
+			body: JSON.stringify({ fake: true }),
+		});
+
+		const subscription = await t.query(components.polar.lib.getSubscription, {
+			id: subscriptionId,
+		});
+
+		expect(response.status).toBe(202);
+		expect(subscription?.id).toBe(subscriptionId);
+		expect(subscription?.productId).toBe("prod_webhook");
+	});
+
+	test("persists and clears pendingUpdate from subscription webhook payloads", async () => {
+		const t = initConvexTest();
+
+		polarSdkMocks.validateEvent.mockReturnValue({
+			type: "subscription.updated",
+			timestamp: new Date("2026-01-03T00:00:00.000Z"),
+			data: createWebhookSubscription({
+				id: "sub_pending_update_route",
+				modifiedAt: new Date("2026-01-03T00:00:00.000Z"),
+				pendingUpdate: {
+					id: "pending_update_route",
+					createdAt: new Date("2026-01-03T00:00:00.000Z"),
+					modifiedAt: null,
+					appliesAt: new Date("2026-02-01T00:00:00.000Z"),
+					productId: "prod_next_route",
+					seats: null,
+				},
+			}),
+		});
+		await t.fetch("/polar/events", {
+			method: "POST",
+			body: JSON.stringify({ fake: true }),
+		});
+
+		const scheduledSubscription = await t.query(components.polar.lib.getSubscription, {
+			id: "sub_pending_update_route",
+		});
+		expect(scheduledSubscription?.pendingUpdate).toEqual({
+			id: "pending_update_route",
+			appliesAt: "2026-02-01T00:00:00.000Z",
+			productId: "prod_next_route",
+			seats: null,
+		});
+
+		polarSdkMocks.validateEvent.mockReturnValue({
+			type: "subscription.updated",
+			timestamp: new Date("2026-01-04T00:00:00.000Z"),
+			data: createWebhookSubscription({
+				id: "sub_pending_update_route",
+				modifiedAt: new Date("2026-01-04T00:00:00.000Z"),
+				pendingUpdate: null,
+			}),
+		});
+		await t.fetch("/polar/events", {
+			method: "POST",
+			body: JSON.stringify({ fake: true }),
+		});
+
+		const subscription = await t.query(components.polar.lib.getSubscription, {
+			id: "sub_pending_update_route",
+		});
+
+		expect(subscription?.pendingUpdate).toBeNull();
+	});
+
+	test("removes local customer mapping for customer.deleted webhooks", async () => {
+		const t = initConvexTest();
+		await t.mutation(components.polar.lib.insertCustomer, {
+			id: "cust_deleted_route",
+			userId: "user_deleted_route",
+		});
+		await t.mutation(components.polar.lib.createSubscription, {
+			subscription: convertToDatabaseSubscription(
+				createWebhookSubscription({
+					id: "sub_deleted_route",
+					customerId: "cust_deleted_route",
+				}),
+			),
+		});
+
+		polarSdkMocks.validateEvent.mockReturnValue({
+			type: "customer.deleted",
+			timestamp: new Date("2026-01-03T00:00:00.000Z"),
+			data: {
+				id: "cust_deleted_route",
+			},
+		});
+		const response = await t.fetch("/polar/events", {
+			method: "POST",
+			body: JSON.stringify({ fake: true }),
+		});
+
+		const customer = await t.query(components.polar.lib.getCustomerByUserId, {
+			userId: "user_deleted_route",
+		});
+		const subscriptions = await t.query(components.polar.lib.listCustomerSubscriptions, {
+			customerId: "cust_deleted_route",
+		});
+
+		expect(response.status).toBe(202);
+		expect(customer).toBeNull();
+		expect(subscriptions.map((subscription) => subscription.id)).toEqual(["sub_deleted_route"]);
+	});
+
 	test("triggers a full product sync when a benefit is updated", async () => {
 		polarSdkMocks.validateEvent.mockReturnValue({
 			type: "benefit.updated",

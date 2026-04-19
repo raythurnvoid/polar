@@ -20,7 +20,7 @@ export type ActionCtx = Pick<
 >;
 
 export const convertToDatabaseSubscription = (
-  subscription: Subscription,
+  subscription: Subscription & { priceId?: string | null },
 ): Infer<typeof schema.tables.subscriptions.validator> => {
   return {
     id: subscription.id,
@@ -28,6 +28,15 @@ export const convertToDatabaseSubscription = (
     createdAt: subscription.createdAt.toISOString(),
     modifiedAt: subscription.modifiedAt?.toISOString() ?? null,
     productId: subscription.productId,
+    pendingUpdate: subscription.pendingUpdate
+      ? {
+          id: subscription.pendingUpdate.id,
+          appliesAt: subscription.pendingUpdate.appliesAt.toISOString(),
+          productId: subscription.pendingUpdate.productId,
+          seats: subscription.pendingUpdate.seats,
+        }
+      : null,
+    priceId: subscription.priceId ?? undefined,
     checkoutId: subscription.checkoutId,
     amount: subscription.amount,
     currency: subscription.currency,

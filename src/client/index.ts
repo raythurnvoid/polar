@@ -518,7 +518,7 @@ export class Polar<
           const event = validateEvent(body, headers, this.webhookSecret);
           const rawPayload = JSON.parse(body) as unknown;
 
-          // Built-in handling: persist subscriptions and products.
+          // Built-in handling: persist mirrored Polar resources.
           switch (event.type) {
             case "subscription.created": {
               await ctx.runMutation(this.component.lib.createSubscription, {
@@ -527,6 +527,16 @@ export class Polar<
               break;
             }
             case "subscription.updated": {
+              await ctx.runMutation(this.component.lib.updateSubscription, {
+                subscription: convertToDatabaseSubscription(event.data),
+              });
+              break;
+            }
+            case "subscription.active":
+            case "subscription.canceled":
+            case "subscription.uncanceled":
+            case "subscription.revoked":
+            case "subscription.past_due": {
               await ctx.runMutation(this.component.lib.updateSubscription, {
                 subscription: convertToDatabaseSubscription(event.data),
               });
@@ -547,6 +557,15 @@ export class Polar<
             case "benefit.created":
             case "benefit.updated": {
               await this.syncProducts(ctx);
+              break;
+            }
+            case "customer.deleted": {
+              await ctx.runMutation(
+                this.component.lib.deleteCustomerByPolarCustomerId,
+                {
+                  polarCustomerId: event.data.id,
+                },
+              );
               break;
             }
           }

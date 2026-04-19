@@ -117,6 +117,17 @@ export default defineSchema(
       startedAt: v.union(v.string(), v.null()),
       endedAt: v.union(v.string(), v.null()),
       productId: v.string(),
+      pendingUpdate: v.optional(
+        v.union(
+          v.object({
+            id: v.string(),
+            appliesAt: v.string(),
+            productId: v.union(v.string(), v.null()),
+            seats: v.union(v.number(), v.null()),
+          }),
+          v.null(),
+        ),
+      ),
       priceId: v.optional(v.string()),
       checkoutId: v.union(v.string(), v.null()),
       metadata: v.record(v.string(), v.any()),

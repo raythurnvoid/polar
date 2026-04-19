@@ -126,6 +126,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             id: string;
             metadata: Record<string, any>;
             modifiedAt: string | null;
+            pendingUpdate?: {
+              appliesAt: string;
+              id: string;
+              productId: string | null;
+              seats: number | null;
+            } | null;
             priceId?: string;
             productId: string;
             recurringInterval: string | null;
@@ -138,6 +144,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           };
         },
         any,
+        Name
+      >;
+      deleteCustomerByPolarCustomerId: FunctionReference<
+        "mutation",
+        "internal",
+        { polarCustomerId: string },
+        null,
         Name
       >;
       getCurrentSubscription: FunctionReference<
@@ -163,6 +176,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           id: string;
           metadata: Record<string, any>;
           modifiedAt: string | null;
+          pendingUpdate?: {
+            appliesAt: string;
+            id: string;
+            productId: string | null;
+            seats: number | null;
+          } | null;
           priceId?: string;
           product: {
             benefits?: Array<{
@@ -353,6 +372,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           id: string;
           metadata: Record<string, any>;
           modifiedAt: string | null;
+          pendingUpdate?: {
+            appliesAt: string;
+            id: string;
+            productId: string | null;
+            seats: number | null;
+          } | null;
           priceId?: string;
           productId: string;
           recurringInterval: string | null;
@@ -402,6 +427,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           id: string;
           metadata: Record<string, any>;
           modifiedAt: string | null;
+          pendingUpdate?: {
+            appliesAt: string;
+            id: string;
+            productId: string | null;
+            seats: number | null;
+          } | null;
           priceId?: string;
           product: {
             benefits?: Array<{
@@ -508,6 +539,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           id: string;
           metadata: Record<string, any>;
           modifiedAt: string | null;
+          pendingUpdate?: {
+            appliesAt: string;
+            id: string;
+            productId: string | null;
+            seats: number | null;
+          } | null;
           priceId?: string;
           productId: string;
           recurringInterval: string | null;
@@ -621,6 +658,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           id: string;
           metadata: Record<string, any>;
           modifiedAt: string | null;
+          pendingUpdate?: {
+            appliesAt: string;
+            id: string;
+            productId: string | null;
+            seats: number | null;
+          } | null;
           priceId?: string;
           product: {
             benefits?: Array<{
@@ -893,6 +936,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             id: string;
             metadata: Record<string, any>;
             modifiedAt: string | null;
+            pendingUpdate?: {
+              appliesAt: string;
+              id: string;
+              productId: string | null;
+              seats: number | null;
+            } | null;
             priceId?: string;
             productId: string;
             recurringInterval: string | null;
