@@ -121,7 +121,9 @@ const seed = internalAction({
       recurringInterval: "month",
       prices: [
         {
-          amountType: "free",
+          // Polar has no "free" amount type. A free price is a fixed price of 0.
+          amountType: "fixed",
+          priceAmount: 0,
         },
       ],
     });

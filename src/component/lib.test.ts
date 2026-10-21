@@ -476,7 +476,8 @@ describe("product price types (SDK → converter → DB round-trip)", () => {
     expect(result?.prices[0].presetAmount).toBe(2000);
   });
 
-  it("converts and stores free price from SDK format", async () => {
+  it("converts and stores free price (fixed, priceAmount 0) from SDK format", async () => {
+    // Polar sends a free price as a fixed price with priceAmount 0.
     const sdkProduct = createSdkProduct({
       prices: [
         {
@@ -485,10 +486,12 @@ describe("product price types (SDK → converter → DB round-trip)", () => {
           createdAt: new Date("2025-01-10T08:00:00.000Z"),
           modifiedAt: null,
           source: "catalog",
-          amountType: "free",
+          amountType: "fixed",
           isArchived: false,
           type: "recurring",
           recurringInterval: "month",
+          priceCurrency: "usd",
+          priceAmount: 0,
         },
       ] as Product["prices"],
     });
@@ -498,7 +501,9 @@ describe("product price types (SDK → converter → DB round-trip)", () => {
     const result = await t.query(api.lib.getProduct, { id: "prod_123" });
 
     expect(result?.prices).toHaveLength(1);
-    expect(result?.prices[0].amountType).toBe("free");
+    expect(result?.prices[0].amountType).toBe("fixed");
+    expect(result?.prices[0].priceAmount).toBe(0);
+    expect(result?.prices[0].priceCurrency).toBe("usd");
   });
 
   it("converts and stores seat-based price from SDK format", async () => {
@@ -707,9 +712,9 @@ describe("SDK 0.45.0 — new-style prices (type/recurringInterval derived from p
     expect(result?.prices[0].priceAmount).toBe(4999);
   });
 
-  it("new-style ProductPriceFree on recurring product (no type/recurringInterval on price object)", async () => {
-    // SDK 0.45.0: ProductPriceFree no longer has type/recurringInterval.
-    // The existing free test uses the legacy form; this tests the new form.
+  it("new-style free ProductPriceFixed (priceAmount 0) on recurring product (no type/recurringInterval on price object)", async () => {
+    // SDK 0.49.0 has no ProductPriceFree. A free price is a fixed price with
+    // priceAmount 0. The existing free test uses the legacy form; this tests the new form.
     const sdkProduct = createSdkProduct({
       isRecurring: true,
       recurringInterval: "month",
@@ -720,9 +725,10 @@ describe("SDK 0.45.0 — new-style prices (type/recurringInterval derived from p
           createdAt: new Date("2025-01-10T08:00:00.000Z"),
           modifiedAt: null,
           source: "catalog",
-          amountType: "free",
+          amountType: "fixed",
           isArchived: false,
           priceCurrency: "usd",
+          priceAmount: 0,
         },
       ] as Product["prices"],
     });
@@ -731,7 +737,8 @@ describe("SDK 0.45.0 — new-style prices (type/recurringInterval derived from p
     await t.mutation(api.lib.createProduct, { product: dbProduct });
     const result = await t.query(api.lib.getProduct, { id: "prod_123" });
 
-    expect(result?.prices[0].amountType).toBe("free");
+    expect(result?.prices[0].amountType).toBe("fixed");
+    expect(result?.prices[0].priceAmount).toBe(0);
     expect(result?.prices[0].type).toBe("recurring");
     expect(result?.prices[0].recurringInterval).toBe("month");
   });
@@ -848,7 +855,8 @@ describe("SDK 0.45.0 — legacy recurring prices (LegacyRecurringProductPrice, b
     expect(result?.prices[0].presetAmount).toBe(1000);
   });
 
-  it("LegacyRecurringProductPriceFree with type/recurringInterval/legacy:true round-trips correctly", async () => {
+  it("free LegacyRecurringProductPriceFixed (priceAmount 0) with type/recurringInterval/legacy:true round-trips correctly", async () => {
+    // Polar turned old legacy free prices into legacy fixed prices with priceAmount 0.
     const sdkProduct = createSdkProduct({
       isRecurring: true,
       recurringInterval: "month",
@@ -859,11 +867,12 @@ describe("SDK 0.45.0 — legacy recurring prices (LegacyRecurringProductPrice, b
           createdAt: new Date("2025-01-10T08:00:00.000Z"),
           modifiedAt: null,
           source: "catalog",
-          amountType: "free",
+          amountType: "fixed",
           isArchived: false,
           type: "recurring",
           recurringInterval: "month",
           priceCurrency: "usd",
+          priceAmount: 0,
           legacy: true,
         },
       ] as Product["prices"],
@@ -873,7 +882,8 @@ describe("SDK 0.45.0 — legacy recurring prices (LegacyRecurringProductPrice, b
     await t.mutation(api.lib.createProduct, { product: dbProduct });
     const result = await t.query(api.lib.getProduct, { id: "prod_123" });
 
-    expect(result?.prices[0].amountType).toBe("free");
+    expect(result?.prices[0].amountType).toBe("fixed");
+    expect(result?.prices[0].priceAmount).toBe(0);
     expect(result?.prices[0].type).toBe("recurring");
     expect(result?.prices[0].recurringInterval).toBe("month");
   });

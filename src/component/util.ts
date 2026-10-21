@@ -88,6 +88,8 @@ export const convertToDatabaseProduct = (
         source: price.source,
       };
 
+      // A free price is a fixed price with priceAmount 0. Polar removed the
+      // "free" amount type, and SDK 0.49.0 no longer has it.
       if (price.amountType === "fixed") {
         return {
           ...basePrice,
@@ -104,10 +106,6 @@ export const convertToDatabaseProduct = (
           maximumAmount: price.maximumAmount,
           presetAmount: price.presetAmount,
         };
-      }
-
-      if (price.amountType === "free") {
-        return basePrice;
       }
 
       if (price.amountType === "seat_based") {

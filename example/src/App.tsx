@@ -14,14 +14,16 @@ import {
 function PriceDisplay({ price }: { price: any }) {
   switch (price.amountType) {
     case "fixed":
+      // Polar sends a free price as a fixed price of 0.
+      if (price.priceAmount === 0) {
+        return <span>Free</span>;
+      }
       return (
         <span>
           ${(price.priceAmount ?? 0) / 100}
           {price.recurringInterval ? `/${price.recurringInterval}` : ""}
         </span>
       );
-    case "free":
-      return <span>Free</span>;
     case "custom":
       return (
         <span>

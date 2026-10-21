@@ -165,10 +165,10 @@ polar.registerRoutes(http, {
 Create a product in the Polar dashboard for each pricing plan that you want to
 offer. The product data will be synced to your Convex app automatically.
 
-The component supports all Polar price types: fixed, free, custom
-(pay-what-you-want), seat-based, and metered. Products can also include
-benefits and free trial periods configured in the Polar dashboard or at
-checkout time.
+The component supports all Polar price types: fixed, custom (pay-what-you-want),
+seat-based, and metered. A free price is a fixed price with a `priceAmount` of
+`0`. Products can also include benefits and free trial periods configured in the
+Polar dashboard or at checkout time.
 
 Products created prior to using this component need to be synced with Convex
 using the `syncProducts` function.
@@ -315,8 +315,7 @@ Each product includes:
 - `trialIntervalCount`: Number of trial intervals (if configured)
 - `benefits`: Array of product benefits (description, type, etc.)
 - `prices`: Array of prices, each with an `amountType` that determines available fields:
-  - **fixed**: `priceAmount` (in cents), `priceCurrency`
-  - **free**: No amount fields
+  - **fixed**: `priceAmount` (in cents, `0` for a free price), `priceCurrency`
   - **custom**: `minimumAmount`, `maximumAmount`, `presetAmount`, `priceCurrency`
   - **seat_based**: `seatTiers` (array of `{ minSeats, maxSeats, pricePerSeat }`), `priceCurrency`
   - **metered_unit**: `unitAmount`, `capAmount`, `meterId`, `meter` (`{ id, name }`), `priceCurrency`
